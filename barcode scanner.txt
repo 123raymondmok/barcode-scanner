@@ -1,0 +1,342 @@
+/**
+ * Program: Barcode Program
+ * Description:
+ *              - BarcodeIO: An interface which has different methods for scanning, reading text, generating and translating images from text, along with displaying texts and images.
+ *               
+ *              - BarcodeImage: Our class which is our 2D barcode pattern. It contains different methods to make a image using 
+ *                the string data also using accessors and modifiers.
+
+ *              - InfoBox: Our BarcodeIO interface.
+ */
+
+
+// Phase 1:
+public interface BarcodeIO {
+    //scanning and storing images ^_^
+    public boolean scan(BarcodeImage bc);
+
+    //Reading our texts
+    public boolean readText(String text);
+
+    //Generating images from the stored text
+    public boolean generateImageFromText();
+
+    // Translating our stored image to text
+    public boolean translateImageToText();
+
+    //Displaying the stored text to the console
+    public void displayTextToConsole();
+
+    // Displaying the stored image to the console
+    public void displayImageToConsole();
+}
+
+// Phase 2:
+
+public class BarcodeImage implements Cloneable {
+    // Constants for the maximum height and width 
+    public static final int MAX_HEIGHT = 30;
+    public static final int MAX_WIDTH = 65;
+
+    // Store Image
+    private boolean[][] imageData;
+
+    //Constructor
+    public BarcodeImage() {
+        // Instantiate a 2D array and fill it with blanks (false)
+        imageData = new boolean[MAX_HEIGHT][MAX_WIDTH];
+    }
+
+    //Constructor with Parameters
+    public BarcodeImage(String[] strData) {
+        this(); // Call the default constructor to initialize imageData :o
+
+        // Check and pack the incoming data into the lower-left corner of the array
+        if (strData != null && strData.length <= MAX_HEIGHT) {
+            int rows = strData.length;
+            int cols = strData[0].length(); // Assuming all strings have the same length
+
+            for (int row = 0; row < rows; row++) {
+                for (int col = 0; col < cols && col < MAX_WIDTH; col++) {
+                    // Convert '1' to true (black) and '0' to false (white)
+                    imageData[MAX_HEIGHT - 1 - row][col] = (strData[row].charAt(col) == '1');
+                }
+            }
+        }
+    }
+
+    //Accessor to get value of a pixel 
+    public boolean getPixel(int row, int col) {
+        if (row >= 0 && row < MAX_HEIGHT && col >= 0 && col < MAX_WIDTH) {
+            return imageData[row][col];
+        }
+        return false; // Return false for out-of-bounds access
+    }
+
+    // Mutator to set the value of a pixel
+    public boolean setPixel(int row, int col, boolean value) {
+        if (row >= 0 && row < MAX_HEIGHT && col >= 0 && col < MAX_WIDTH) {
+            imageData[row][col] = value;
+            return true;
+        }
+        return false; // Return false for out-of-bounds access
+    }
+
+    // Private method to checking the size of incoming data
+    private boolean checkSize(String[] data) {
+        return data != null && data.length <= MAX_HEIGHT;
+    }
+
+    // Optional - Displaying our image to the console  (debugging)
+    public void displayToConsole() {
+        for (int row = 0; row < MAX_HEIGHT; row++) {
+            for (int col = 0; col < MAX_WIDTH; col++) {
+                System.out.print(imageData[row][col] ? '*' : ' ');
+            }
+            System.out.println();
+        }
+    }
+
+    // Cloning our method for a copy.
+    @Override
+    public BarcodeImage clone() {
+        try {
+            BarcodeImage clone = (BarcodeImage) super.clone();
+
+            // Deep copy of imageData
+            clone.imageData = new boolean[MAX_HEIGHT][MAX_WIDTH];
+            for (int row = 0; row < MAX_HEIGHT; row++) {
+                System.arraycopy(this.imageData[row], 0, clone.imageData[row], 0, MAX_WIDTH);
+            }
+
+            return clone;
+        } catch (CloneNotSupportedException e) {
+            // Should not happen since BarcodeImage implements Cloneable
+            return null;
+        }
+    }
+}
+
+// Phase 3:
+
+public class InfoBox implements BarcodeIO {
+    // Constants for characters
+    public static final char BLACK_CHAR = '*';
+    public static final char WHITE_CHAR = ' ';
+
+    // Internal data
+    private BarcodeImage image;
+    private String text;
+    private int actualWidth;
+    private int actualHeight;
+
+    // Constructors
+    public InfoBox() {
+        // Default Constructor
+        image = new BarcodeImage();
+        text = "undefined";
+        actualWidth = 0;
+        actualHeight = 0;
+    }
+
+    public InfoBox(BarcodeImage image) {
+        // Constructor with BarcodeImage
+        this();
+        scan(image);
+    }
+
+    public InfoBox(String text) {
+        // Constructor with text
+        this();
+        readText(text);
+    }
+
+    // Mutators
+    @Override
+    public boolean scan(BarcodeImage image) {
+        try {
+            this.image = image.clone(); // Use clone to create a deep copy
+            actualWidth = computeSignalWidth();
+            actualHeight = computeSignalHeight();
+            return true;
+        } catch (CloneNotSupportedException e) {
+            // Do nothing in case of CloneNotSupportedException
+            return false;
+        }
+    }
+
+    @Override
+    public boolean readText(String text) {
+        this.text = text;
+        return true;
+    }
+
+    @Override
+    public boolean generateImageFromText() {
+        clearImage();  // Clear the existing image
+
+        // Looping through each character in the text
+        for (int col = 0; col < text.length(); col++) {
+            char currentChar = text.charAt(col);
+            // Use helper method to write the character to the corresponding column in the image
+            writeCharToCol(col, currentChar);
+        }
+
+        // Setting the actualWidth and actualHeight based on image
+        actualWidth = computeSignalWidth();
+        actualHeight = computeSignalHeight();
+
+        return true;
+    }
+
+    @Override
+    public boolean translateImageToText() {
+        StringBuilder translatedText = new StringBuilder();
+
+        // Looping through each column in the image
+        for (int col = 0; col < actualWidth; col++) {
+            // Reading the character from the exact column in the image
+            char currentChar = readCharFromCol(col);
+            translatedText.append(currentChar);
+        }
+
+        // Set the translated text to the internal text
+        text = translatedText.toString();
+        return false;
+    }
+
+    // Accessors
+    public int getActualWidth() {
+        return actualWidth;
+    }
+
+    public int getActualHeight() {
+        return actualHeight;
+    }
+
+    // Private methods
+    private int computeSignalWidth() {
+        // Compute actualWidth based on the left BLACK spine
+        int col = 0;
+        while (col < BarcodeImage.MAX_WIDTH && image.getPixel(BarcodeImage.MAX_HEIGHT - 1, col)) {
+            col++;
+        }
+        return col;
+    }
+
+    private int computeSignalHeight() {
+        // Compute actualHeight based on the bottom BLACK spine
+        int row = 0;
+        while (row < BarcodeImage.MAX_HEIGHT && image.getPixel(row, 0)) {
+            row++;
+        }
+        return row;
+    }
+
+    // Display methods
+    @Override
+    public void displayTextToConsole() {
+        System.out.println(text);
+    }
+
+    @Override
+    public void displayImageToConsole() {
+        for (int row = BarcodeImage.MAX_HEIGHT - actualHeight; row < BarcodeImage.MAX_HEIGHT; row++) {
+            for (int col = 0; col < actualWidth; col++) {
+                System.out.print(image.getPixel(row, col) ? BLACK_CHAR : WHITE_CHAR);
+            }
+            System.out.println();
+        }
+        System.out.println("".equals(text) ? "" : new String(new char[actualWidth]).replace('\0', '-'));
+    }
+
+    // Optional method for debugging
+    public void displayRawImage() {
+        image.displayToConsole();
+    }
+
+    // Optional method to clear the image
+    private void clearImage() {
+        image = new BarcodeImage();
+    }
+
+    // Main method for testing
+    public static void main(String[] args) {
+        String[] sImageIn = {
+                    "* * * * * * * * * * * * * * *",
+                    "*                           *",
+                    "**********  *** *** *******  ",
+                    "* ***************************",
+                    "**    * *   * *  *   * *     ",
+                    "* **     ** **          **  *",
+                    "****** ****  **   *  ** ***  ",
+                    "****  **     *   *   * **   *",
+                    "***  *  *   *** * * ******** ",
+                    "*****************************"
+                };
+
+                String[] sImageIn_2 = {
+                    "* * * * * * * * * * * * * * *",
+                    "*                           *",
+                    "*** ** ******** ** ***** *** ",
+                    "*  **** ***************** ***",
+                    "* *  *    *      *  *  *  *  ",
+                    "*       ** **** *          **",
+                    "*    * ****  **    * * * *** ",
+                    "***    ***       * **    * **",
+                    "*** *   **  *   ** * **   *  ",
+                    "*****************************"
+                };
+
+                BarcodeImage bc = new BarcodeImage(sImageIn);
+                InfoBox dm = new InfoBox(bc);
+
+                // First secret message
+                dm.translateImageToText();
+                dm.displayTextToConsole();
+                dm.displayImageToConsole();
+
+                // Second secret message
+                bc = new BarcodeImage(sImageIn_2);
+                dm.scan(bc);
+                dm.translateImageToText();
+                dm.displayTextToConsole();
+                dm.displayImageToConsole();
+
+                // Create your own message
+                dm.readText("What a great resume builder this is!");
+                dm.generateImageFromText();
+                dm.displayTextToConsole();
+                dm.displayImageToConsole();
+            }
+}
+
+
+
+
+
+//Output:
+
+***   *   **  **   *    ***   *   *   ***   *   *   **  **   *    
+What a great resume builder this is!
+**********************************
+*                                *
+****   *  ***** **** **** ******  
+*   *** ***************** ****** 
+*  * **  *   *   *  *     * **    
+* *       * *  **   * * *    ****
+*     *   *    ** * *  *  *  ** *
+** * *** *****  **    * *     ** 
+****  *   **** ** *  *   * *  **
+**********************************
+What a great resume builder this is!
+**********************************
+*                                *
+****   *  ***** **** **** ******  
+*   *** ***************** ****** 
+*  * **  *   *   *  *     * **    
+* *       * *  **   * * *    ****
+*     *   *    ** * *  *  *  ** *
+** * *** *****  **    * *     ** 
+****  *   **** ** *  *   * *  **
+**********************************
